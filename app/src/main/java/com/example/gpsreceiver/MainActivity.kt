@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,10 @@ import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModel
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.remember
 class MainActivity : ComponentActivity() {
 
     var locationManager : LocationManager? = null
@@ -70,14 +75,19 @@ class MainActivity : ComponentActivity() {
                         pressure = viewModel.strPressure,
                         height = viewModel.strHeight,
                         speed = viewModel.strSpeed,
-                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.padding(innerPadding),
+                        selectedProvider = viewModel.selectedProvider,
+                        onProviderSelected = { provider ->
+                            viewModel.selectedProvider = provider
+                            registerLocationListener(provider)
+                        }
                     )
                 }
             }
         }
     }
 
-    fun registerLocationListener() {
+    fun registerLocationListener(provider: String = LocationManager.GPS_PROVIDER) {
         if(ActivityCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_FINE_LOCATION
         ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
@@ -87,9 +97,9 @@ class MainActivity : ComponentActivity() {
             showPermissionRationaleDialog()
             return
         }
-        locationManager?.requestLocationUpdates(
-            LocationManager.GPS_PROVIDER, 0, 0f, locationListener
-        )
+        locationManager?.removeUpdates(locationListener)
+        locationManager?.requestLocationUpdates(provider, 0, 0f, locationListener)
+
 
     }
 
@@ -134,9 +144,11 @@ class MainActivity : ComponentActivity() {
         }
 
         @Deprecated("Deprecated in Java")
-        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
-            // leer lassen ist ok
-        }
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+
+        override fun onProviderEnabled(provider: String) {}
+
+        override fun onProviderDisabled(provider: String) {}
 
     }
 
@@ -150,11 +162,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-
 }
 
 @Composable
-fun Values(location: String, pressure: String, height: String, speed: String, modifier: Modifier = Modifier) {
+fun Values(location: String, pressure: String, height: String, speed: String, selectedProvider: String, onProviderSelected: (String) -> Unit, modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.background),
@@ -170,7 +181,7 @@ fun Values(location: String, pressure: String, height: String, speed: String, mo
         )
         Column(
                 modifier = modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text = "GPS Receiver",
@@ -178,6 +189,25 @@ fun Values(location: String, pressure: String, height: String, speed: String, mo
                 modifier = Modifier.padding(bottom = 8.dp),
                 color = MaterialTheme.colorScheme.background
             )
+            var expanded by remember { mutableStateOf(false) }
+            Box {
+                Button(onClick = { expanded = true }) {
+                    val providerLabel = if (selectedProvider == LocationManager.GPS_PROVIDER) "GPS" else "Network"
+                    Text("Provider: $providerLabel")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("▼")
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("GPS") },
+                        onClick = { onProviderSelected(LocationManager.GPS_PROVIDER); expanded = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Network") },
+                        onClick = { onProviderSelected(LocationManager.NETWORK_PROVIDER); expanded = false }
+                    )
+                }
+            }
 
             GpsCard(label = "Location", value = location)
             GpsCard(label = "Altitude", value = height)
@@ -213,12 +243,15 @@ class MyViewModel : ViewModel() {
     var strPressure by mutableStateOf("pressure")
     var strHeight by mutableStateOf("height")
     var strSpeed by mutableStateOf("speed")
+    var selectedProvider by mutableStateOf(LocationManager.GPS_PROVIDER)
+
 }
 
 @Preview(showBackground = true)
 @Composable
 fun ValuesPreview() {
     GPSReceiverTheme {
-        Values("location", "pressure", "height", "speed")
+        Values("location", "pressure", "height", "speed",
+            selectedProvider = LocationManager.GPS_PROVIDER, onProviderSelected = {})
     }
 }
